@@ -120,6 +120,47 @@ The script hardcodes `paper=True` when constructing the Alpaca `TradingClient` �
 
 **On going from paper to real money:** that is a decision only you can make, not something to flip a flag on. An LLM-driven strategy that hasn't been validated out-of-sample, against a benchmark, across different market regimes, risking actual capital is genuinely risky — treat paper trading as a multi-month validation step, not a formality.
 
+## Going live
+
+**Platform decision (2026-11-12):** staying on Alpaca for live trading too,
+rather than adding a second broker like Interactive Brokers. Alpaca's paper
+and live environments use the *identical* API — only the base URL and keys
+differ — so this is close to the smoothest paper-to-live path that exists for
+this kind of system, and our whole `paper_trader.py` already targets it. IBKR
+is more widely regarded among serious/active day traders (lower costs at
+scale, multi-asset, more robust), but its API runs through a local TWS/IB
+Gateway process rather than pure REST, and would mean building and testing a
+second execution adapter — not worth it unless Alpaca itself becomes the
+blocker. Known Alpaca caveats to go in aware of: the free data tier is
+IEX-only (not full consolidated tape), there are older but real complaints
+about account holds and support responsiveness, and the documented pattern
+day trader rule ($25k minimum equity for >3 day trades in 5 business days in
+a margin account) applies here same as any US broker.
+
+**Do this now, independent of the Feb 16, 2027 checkpoint** (identity
+verification takes time, so there's no reason to wait):
+1. Apply for a **live** Alpaca brokerage account at https://alpaca.markets/
+   (separate from the paper API keys you already have — this is a real
+   brokerage account with identity verification/KYC). Leave it unfunded.
+2. Generate live API keys from the live section of the dashboard, add them
+   to `.env` as `ALPACA_LIVE_API_KEY` / `ALPACA_LIVE_SECRET_KEY` (kept
+   separate from the paper keys on purpose — see `.env.example`).
+3. Do **not** fund the account yet. That's a separate, later decision.
+
+**When you've actually decided to go live** (after re-running the RESEARCH.md
+§4 audit with real numbers, not before):
+1. Fund the live account with an amount you've genuinely decided you can
+   afford to lose.
+2. Run with both an explicit flag and an explicit environment variable —
+   deliberately two separate steps so this can never be triggered by a stray
+   flag or a copy-pasted command:
+   ```bash
+   LIVE_TRADING_CONFIRM=I_UNDERSTAND_THIS_IS_REAL_MONEY python -m src.live.paper_trader --tickers AAPL,MSFT,NVDA --live
+   ```
+3. There is no code change required beyond that — same agent, same risk
+   sizing, same drawdown kill switch, same blotter/ledger. That consistency
+   is the entire point of staying on one broker's API end to end.
+
 ## Data Collection & Rules (building toward Feb 16, 2027)
 
 **Target date for adding real money: February 16, 2027.** Until then, this repo

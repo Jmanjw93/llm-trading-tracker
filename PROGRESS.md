@@ -35,6 +35,10 @@ the single source of truth for "where are we" across sessions.
 - [ ] True embedding-based relevancy (currently TF-IDF) and multi-layer memory decay (FinMem's full design) - not implemented, see RESEARCH.md §5
 - [ ] Re-run the RESEARCH.md §4 five-question audit with real numbers before Feb 16, 2027
 - [ ] First calibration report with real (non-fabricated) data - needs 14 trading days of real live_blotter.csv predictions
+- [x] Broker decision for going live: staying on Alpaca (not adding IBKR) - 2026-11-12, see README "Going live"
+- [x] `--live` flag + two-factor safety gate (flag + LIVE_TRADING_CONFIRM env var + separate ALPACA_LIVE_* keys) built into `paper_trader.py` - 2026-11-12
+- [ ] Live Alpaca brokerage account created (unfunded) - **on you**, see README "Going live" step 1. Start this now; identity verification takes time and isn't gated on the Feb 16 checkpoint.
+- [ ] Live account funded - do not do this before re-running the RESEARCH.md §4 audit with real numbers
 
 ## Collection log
 
@@ -64,3 +68,11 @@ the single source of truth for "where are we" across sessions.
   wired into `paper_trader.py`. Verified against fabricated fixtures, not yet
   real data. See RESEARCH.md §5 and RULES.md "Known limitations" for the
   synthetic-mode history collision caveat this introduced.
+- **2026-11-12**: Decided to stay on Alpaca for live trading rather than add
+  an Interactive Brokers adapter, specifically because paper and live share
+  the identical API on Alpaca - the whole system already targets it, so going
+  live needs zero code changes. IBKR is more respected among serious day
+  traders generally, but its API complexity (local TWS/Gateway process) made
+  it not worth a second adapter unless Alpaca becomes the actual blocker.
+  Built a two-factor safety gate (`--live` flag + `LIVE_TRADING_CONFIRM` env
+  var + separate live key names) so this can't be triggered by accident.

@@ -198,22 +198,50 @@ def simulate_dry_run(tickers: List[str], llm_choice: str, hf_model_name: str, st
     }
 
 
-class _AlpacaAccount:
-    """Thin wrapper around alpaca-py, hardcoded to the PAPER trading endpoint."""
+LIVE_TRADING_CONFIRMATION = "I_UNDERSTAND_THIS_IS_REAL_MONEY"
 
-    def __init__(self, tickers: List[str]):
+
+class _AlpacaAccount:
+    """
+    Thin wrapper around alpaca-py. Defaults to the PAPER endpoint. Switching to
+    the live endpoint requires BOTH the --live CLI flag AND the
+    LIVE_TRADING_CONFIRM environment variable set to the exact string
+    LIVE_TRADING_CONFIRMATION - deliberately two separate, explicit steps so
+    this can never be triggered by a stray flag or a copy-pasted command. See
+    README "Going live" for the full checklist before ever setting this.
+    """
+
+    def __init__(self, tickers: List[str], live: bool = False):
+        # Checked before anything else - including the alpaca-py import - so
+        # this gate can never be bypassed by an environment that happens to
+        # be missing the dependency, and fails with the real reason first.
+        if live and os.environ.get("LIVE_TRADING_CONFIRM") != LIVE_TRADING_CONFIRMATION:
+            raise RuntimeError(
+                "--live was passed but LIVE_TRADING_CONFIRM is not set to the exact "
+                f"confirmation string. Set the environment variable LIVE_TRADING_CONFIRM="
+                f"{LIVE_TRADING_CONFIRMATION} only once you have actually decided to risk "
+                "real capital - see README 'Going live' first."
+            )
+
         from alpaca.trading.client import TradingClient
         from alpaca.data.historical import StockHistoricalDataClient
 
-        api_key = os.environ.get("ALPACA_API_KEY")
-        secret_key = os.environ.get("ALPACA_SECRET_KEY")
+        if live:
+            api_key = os.environ.get("ALPACA_LIVE_API_KEY")
+            secret_key = os.environ.get("ALPACA_LIVE_SECRET_KEY")
+            key_hint = "ALPACA_LIVE_API_KEY / ALPACA_LIVE_SECRET_KEY"
+        else:
+            api_key = os.environ.get("ALPACA_API_KEY")
+            secret_key = os.environ.get("ALPACA_SECRET_KEY")
+            key_hint = "ALPACA_API_KEY / ALPACA_SECRET_KEY"
+
         if not api_key or not secret_key:
             raise RuntimeError(
-                "ALPACA_API_KEY / ALPACA_SECRET_KEY not set. Copy .env.example to .env, "
-                "fill in your Alpaca PAPER keys, and make sure they're loaded (python-dotenv)."
+                f"{key_hint} not set. Copy .env.example to .env, fill in your Alpaca "
+                f"{'LIVE' if live else 'PAPER'} keys, and make sure they're loaded (python-dotenv)."
             )
         self.tickers = tickers
-        self.trading_client = TradingClient(api_key, secret_key, paper=True)  # paper=True is intentional and not a CLI flag
+        self.trading_client = TradingClient(api_key, secret_key, paper=not live)
         self.data_client = StockHistoricalDataClient(api_key, secret_key)
 
     def get_equity(self) -> float:
@@ -262,12 +290,12 @@ class _AlpacaAccount:
 
 
 def run_once(tickers: List[str], llm_choice: str, hf_model_name: str, strategy: str,
-             cfg: Config, dry_run: bool, lookback_days: int = 90) -> Dict:
+             cfg: Config, dry_run: bool, live: bool = False, lookback_days: int = 90) -> Dict:
     from ..collectors.market_collector import append_to_history
     from ..rules import trade_ledger
     from ..agents import memory_store
 
-    account = _DryRunAccount(tickers) if dry_run else _AlpacaAccount(tickers)
+    account = _DryRunAccount(tickers) if dry_run else _AlpacaAccount(tickers, live=live)
 
     raw = account.fetch_recent_bars(lookback_days)
     featured = add_technical_features(raw)
@@ -366,7 +394,15 @@ def main():
     ap.add_argument("--warmup_days", type=int, default=30,
                      help="Only used with --sim_days: extra lead-in days so indicators/retriever have history.")
     ap.add_argument("--seed", type=int, default=7, help="Only used with --dry_run.")
+    ap.add_argument("--live", action="store_true",
+                     help="DANGER: trade with real money on Alpaca's live endpoint instead of paper. "
+                          "Requires ALPACA_LIVE_API_KEY/SECRET_KEY in .env AND the environment "
+                          "variable LIVE_TRADING_CONFIRM set to the exact string checked in "
+                          "_AlpacaAccount - this flag alone does nothing. See README 'Going live'.")
     args = ap.parse_args()
+
+    if args.live and args.dry_run:
+        raise SystemExit("--live and --dry_run together makes no sense - pick one.")
 
     try:
         from dotenv import load_dotenv
@@ -393,9 +429,15 @@ def main():
         print("Blotter:", result["blotter_csv"])
         return
 
-    result = run_once(tickers, args.llm, args.hf_model_name, args.strategy, cfg, args.dry_run)
+    if args.live:
+        print("=" * 60)
+        print("LIVE TRADING MODE - REAL MONEY - NOT A DRILL")
+        print("=" * 60)
 
-    print(f"{'[DRY RUN] ' if args.dry_run else ''}Equity: {result['equity']:.2f}  risk_on: {result['risk_on']}")
+    result = run_once(tickers, args.llm, args.hf_model_name, args.strategy, cfg, args.dry_run, live=args.live)
+
+    mode_prefix = "[DRY RUN] " if args.dry_run else ("[LIVE] " if args.live else "[PAPER] ")
+    print(f"{mode_prefix}Equity: {result['equity']:.2f}  risk_on: {result['risk_on']}")
     print("Target weights:", {k: round(v, 4) for k, v in result["weights"].items()})
     print("Orders submitted:", result["orders"])
     print("Blotter:", result["blotter_path"])
