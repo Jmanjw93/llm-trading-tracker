@@ -47,6 +47,11 @@ def sync_from_blotter(blotter_path: str, horizon_trading_days: int = 14) -> None
     if not os.path.exists(blotter_path):
         return
     blotter = pd.read_csv(blotter_path, parse_dates=["date"])
+    if "dry_run" in blotter.columns:
+        # Dry-run rows are synthetic test data (fake prices, fake "today") and
+        # must never enter the calibration/memory pipeline alongside real
+        # paper or live predictions - they'd silently corrupt both.
+        blotter = blotter[blotter["dry_run"] != True]  # noqa: E712 (explicit for CSV-loaded bools/strings)
     if blotter.empty:
         return
 

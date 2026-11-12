@@ -47,6 +47,7 @@ from ..utils.portfolio import position_size
 
 STATE_PATH = "./outputs/live_state.json"
 BLOTTER_PATH = "./outputs/live_blotter.csv"
+DRY_RUN_BLOTTER_PATH = "./outputs/dry_run_blotter.csv"
 
 
 def _load_state() -> Dict:
@@ -278,10 +279,15 @@ class _AlpacaAccount:
     def fetch_recent_bars(self, lookback_days: int) -> pd.DataFrame:
         from alpaca.data.requests import StockBarsRequest
         from alpaca.data.timeframe import TimeFrame
+        from alpaca.data.enums import DataFeed
 
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=int(lookback_days * 1.6) + 5)  # pad for weekends/holidays
-        req = StockBarsRequest(symbol_or_symbols=self.tickers, timeframe=TimeFrame.Day, start=start, end=end)
+        # feed=IEX because the free Alpaca data plan doesn't include SIP
+        # (consolidated tape) data; the client defaults to SIP and 403s
+        # otherwise. Upgrade this if/when a paid data subscription is added.
+        req = StockBarsRequest(symbol_or_symbols=self.tickers, timeframe=TimeFrame.Day,
+                                start=start, end=end, feed=DataFeed.IEX)
         bars = self.data_client.get_stock_bars(req).df.reset_index()
         bars = bars.rename(columns={"symbol": "ticker", "timestamp": "date"})
         bars["date"] = pd.to_datetime(bars["date"]).dt.tz_localize(None).dt.normalize()
@@ -361,13 +367,18 @@ def run_once(tickers: List[str], llm_choice: str, hf_model_name: str, strategy: 
             "equity": equity,
             "dry_run": dry_run,
         })
+    # Dry-run writes to its own file - never the real blotter - so synthetic
+    # test predictions can never enter the calibration/memory pipeline
+    # alongside real paper or live ones (this used to rely on a downstream
+    # filter in trade_ledger.py alone; this is the actual fix, at the source).
+    out_path = DRY_RUN_BLOTTER_PATH if dry_run else BLOTTER_PATH
     blotter_df = pd.DataFrame(blotter_rows)
-    os.makedirs(os.path.dirname(BLOTTER_PATH) or ".", exist_ok=True)
-    header = not os.path.exists(BLOTTER_PATH)
-    blotter_df.to_csv(BLOTTER_PATH, mode="a", index=False, header=header)
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    header = not os.path.exists(out_path)
+    blotter_df.to_csv(out_path, mode="a", index=False, header=header)
 
     return {"equity": equity, "risk_on": risk_on, "weights": weights, "orders": orders,
-            "blotter_path": BLOTTER_PATH}
+            "blotter_path": out_path}
 
 
 def main():

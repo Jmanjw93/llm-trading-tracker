@@ -132,10 +132,20 @@ scale, multi-asset, more robust), but its API runs through a local TWS/IB
 Gateway process rather than pure REST, and would mean building and testing a
 second execution adapter — not worth it unless Alpaca itself becomes the
 blocker. Known Alpaca caveats to go in aware of: the free data tier is
-IEX-only (not full consolidated tape), there are older but real complaints
-about account holds and support responsiveness, and the documented pattern
-day trader rule ($25k minimum equity for >3 day trades in 5 business days in
-a margin account) applies here same as any US broker.
+IEX-only (not full consolidated tape), and there are older but real
+complaints about account holds and support responsiveness.
+
+**Pattern day trader rule update (verified 2026-11-12):** the old $25,000
+minimum equity / "no more than 3 day trades in 5 business days" rule was
+**replaced** by FINRA's new intraday margin standards, effective June 4, 2026
+(SEC-approved April 14, 2026) — confirmed directly against our own account,
+whose API response now omits the old `pattern_day_trader` field with a
+deprecation notice citing this exact migration. Firms have until October 2027
+to fully transition off the old system, so Alpaca's actual enforcement during
+that window may still differ in practice from the new rule on paper — don't
+assume either the old $25k threshold or a clean implementation of the new
+intraday-deficit standard without checking Alpaca's current account terms
+directly before relying on margin/day-trade behavior.
 
 **Do this now, independent of the Feb 16, 2027 checkpoint** (identity
 verification takes time, so there's no reason to wait):

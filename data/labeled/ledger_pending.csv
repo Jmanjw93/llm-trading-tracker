@@ -1,0 +1,4 @@
+date,ticker,timestamp,direction,confidence,reason,weight,risk_on,equity,dry_run,horizon_trading_days
+2026-11-11,AAPL,2026-11-12T02:37:01.859992+00:00,neutral,0.4994526763731453,"Heuristic signal: pos=0, neg=0.",0.0,True,100000.0,False,14.0
+2026-11-11,MSFT,2026-11-12T02:37:01.860613+00:00,neutral,0.4992962459196088,"Heuristic signal: pos=0, neg=0.",0.0,True,100000.0,False,14.0
+2026-11-11,NVDA,2026-11-12T02:37:01.861154+00:00,neutral,0.5405610405123576,"Heuristic signal: pos=0, neg=0.",0.0,True,100000.0,False,14.0
