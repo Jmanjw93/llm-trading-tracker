@@ -2,7 +2,7 @@
 
 **Target date for real money: February 16, 2027** — as of 2026-11-12, treat this
 as a **scheduled review checkpoint, not an automatic go-live date**. See
-RESEARCH.md §5: our sample size (50 tickers x ~66 trading days by then) will
+RESEARCH.md §6: our sample size (50 tickers x ~66 trading days by then) will
 likely still be below the field's own bar for a believable "this works" claim.
 On that date, re-run the 5-question audit in RESEARCH.md §4 with real numbers
 before deciding anything about real capital.
@@ -29,14 +29,18 @@ the single source of truth for "where are we" across sessions.
 - [ ] Bootstrap Reddit scan (`scripts/bootstrap_reddit_scan.py`) - not yet run for real; needs working Reddit access first
 - [x] Research pass: surveyed academic WSB-sentiment literature + GitHub LLM-trading ecosystem, self-audited against an external rigor checklist - 2026-11-12, see `RESEARCH.md`
 - [ ] FinBERT sentiment scoring (researched, not implemented - RESEARCH.md §2)
-- [ ] FinMem-style layered memory for the retriever (researched, not implemented - RESEARCH.md §3)
+- [x] Day-to-day trade measurement: `src/rules/trade_ledger.py` resolves every blotter prediction (not just rule-flagged ones) against realized 14-day return, computes Brier score + a confidence-decile reliability table - 2026-11-12, see RESEARCH.md §5
+- [x] FinMem-lite memory store (`src/agents/memory_store.py`): TF-IDF-based recency x relevancy x importance scoring over resolved calls, feeds the best matches in as few-shot examples instead of the two generic hardcoded ones - 2026-11-12, see RESEARCH.md §5
+- [x] Experience-summary prompt block (CryptoTrade/TradingGroup pattern): `trade_ledger.summarize_recent_performance()` wired into every prompt via `experience_block` - 2026-11-12
+- [ ] True embedding-based relevancy (currently TF-IDF) and multi-layer memory decay (FinMem's full design) - not implemented, see RESEARCH.md §5
 - [ ] Re-run the RESEARCH.md §4 five-question audit with real numbers before Feb 16, 2027
+- [ ] First calibration report with real (non-fabricated) data - needs 14 trading days of real live_blotter.csv predictions
 
 ## Collection log
 
 | Date | Trading day # | Tickers | Flagged | Pending | Resolved | Notes |
 |---|---|---|---|---|---|---|
-| 2026-11-12 | 1 | 50 | TXN | 1 | 0 | |
+| 2026-11-12 | 35 | 50 | ORLY | 2 | 0 | |
 
 ## Decisions
 
@@ -54,3 +58,9 @@ the single source of truth for "where are we" across sessions.
   added HF model revision pinning, based on an external research pass - see
   `RESEARCH.md`. Also reframed Feb 16, 2027 from a fixed go-live date to a
   review checkpoint, for the same reason (sample size).
+- **2026-11-12**: Built the day-to-day measurement/learning loop that was
+  previously missing - `trade_ledger.py` (Brier score + calibration table +
+  experience summary) and `memory_store.py` (FinMem-lite few-shot selection),
+  wired into `paper_trader.py`. Verified against fabricated fixtures, not yet
+  real data. See RESEARCH.md §5 and RULES.md "Known limitations" for the
+  synthetic-mode history collision caveat this introduced.

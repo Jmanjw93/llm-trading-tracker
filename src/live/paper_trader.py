@@ -263,6 +263,10 @@ class _AlpacaAccount:
 
 def run_once(tickers: List[str], llm_choice: str, hf_model_name: str, strategy: str,
              cfg: Config, dry_run: bool, lookback_days: int = 90) -> Dict:
+    from ..collectors.market_collector import append_to_history
+    from ..rules import trade_ledger
+    from ..agents import memory_store
+
     account = _DryRunAccount(tickers) if dry_run else _AlpacaAccount(tickers)
 
     raw = account.fetch_recent_bars(lookback_days)
@@ -271,8 +275,26 @@ def run_once(tickers: List[str], llm_choice: str, hf_model_name: str, strategy: 
     train_window = featured[featured["date"] < today]
     today_df = featured[featured["date"] == today].copy()
 
+    # Persist to the shared price history so trade_ledger can resolve today's
+    # predictions 14 trading days from now, regardless of whether this run's
+    # own lookback window still covers that far back by then.
+    append_to_history(featured[featured["ticker"].isin(tickers)])
+
+    # Resolve any earlier predictions whose horizon has now elapsed, before
+    # building today's prompt, so the experience summary reflects the latest
+    # known outcomes (see RESEARCH.md section 6 / trade_ledger.py).
+    trade_ledger.sync_from_blotter(BLOTTER_PATH)
+    experience_text = trade_ledger.summarize_recent_performance()
+
     llm = MockLLM() if llm_choice == "mock" else HFModel(model_name=hf_model_name)
-    agent = TradingAgent(llm=llm, cfg=AgentConfig(strategy=strategy))
+    few_shots_from_memory = memory_store.build_few_shot_examples(
+        query_ticker="", query_text=" ".join(tickers), k=3,
+    )
+    agent_cfg = AgentConfig(strategy=strategy)
+    if few_shots_from_memory:
+        agent_cfg.few_shots = few_shots_from_memory
+    agent = TradingAgent(llm=llm, cfg=agent_cfg)
+    agent.experience_text = experience_text
     agent.fit(train_window)  # retriever only ever sees strictly prior days
     preds = agent.predict_day(today_df)
 
@@ -280,7 +302,7 @@ def run_once(tickers: List[str], llm_choice: str, hf_model_name: str, strategy: 
     risk_on = _update_kill_switch(_state := _load_state(), equity, cfg.max_dd, cfg.dd_recover_frac)
     _save_state(_state)
 
-    merged = today_df.merge(preds[["ticker", "direction", "confidence"]], on="ticker", how="left")
+    merged = today_df.merge(preds[["ticker", "direction", "confidence", "reason"]], on="ticker", how="left")
     weights = {}
     for _, r in merged.iterrows():
         signal = TradingAgent.direction_to_signal(r.get("direction", "neutral"))
@@ -305,6 +327,7 @@ def run_once(tickers: List[str], llm_choice: str, hf_model_name: str, strategy: 
             "ticker": t,
             "direction": row["direction"].iloc[0] if len(row) else "neutral",
             "confidence": float(row["confidence"].iloc[0]) if len(row) else 0.0,
+            "reason": row["reason"].iloc[0] if len(row) and "reason" in row.columns else "",
             "weight": weights.get(t, 0.0),
             "risk_on": risk_on,
             "equity": equity,
@@ -376,6 +399,16 @@ def main():
     print("Target weights:", {k: round(v, 4) for k, v in result["weights"].items()})
     print("Orders submitted:", result["orders"])
     print("Blotter:", result["blotter_path"])
+
+    from ..rules import trade_ledger
+    calibration = trade_ledger.compute_calibration()
+    if calibration.get("n", 0) > 0:
+        print(f"\nCalibration so far: n={calibration['n']}  "
+              f"brier_score={calibration['brier_score']:.4f}  "
+              f"overall_hit_rate={calibration['overall_hit_rate']:.2%}")
+        print("(Brier 0.25 = as good as always saying 50% confident; lower is better.)")
+    else:
+        print("\nNo resolved predictions yet - calibration report will appear once calls are 14 trading days old.")
 
 
 if __name__ == "__main__":

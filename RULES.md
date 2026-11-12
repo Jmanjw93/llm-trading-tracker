@@ -65,6 +65,14 @@ This resolved file is the actual training signal:
   Feb 16, 2027) is still below the field's informal floor of 50 names / 250
   trading days for a believable "it works" claim. Treat any hit-rate number
   from `weekly_rule_review()` before then as directional, not conclusive.
+- **Synthetic-mode history collisions.** Until real Alpaca keys are added,
+  `market_collector.py` and `paper_trader.py` each generate synthetic prices
+  with their own random seed when a ticker overlaps between them, and both
+  write to the same `data/market/history.csv` keyed on (date, ticker) -
+  whichever ran most recently wins. This resolves itself automatically once
+  real keys are in place (both would pull the same real prices), so it's not
+  worth engineering around now, but don't trust `history.csv` price
+  continuity across collectors until then.
 
 ## Weekly review process
 

@@ -1,2 +1,3 @@
 date,ticker,flag_volume_spike,flag_price_gap,flag_rsi_extreme,flag_reddit_momentum,reddit_mention_count,reddit_max_score,reddit_max_upvote_ratio,reddit_post_urls,anomaly_score,flagged,horizon_trading_days,resolved
 2026-11-12,TXN,False,True,True,False,0,0,0.0,,2,True,14,False
+2026-11-12,ORLY,False,True,True,False,0,0,0.0,,2,True,14,False

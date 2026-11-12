@@ -40,6 +40,7 @@ llm_trading_system/
       trading_agent.py
       rag_retriever.py
       llm_interface.py               # MockLLM, HFModel (real local inference), OpenAIModel (stub)
+      memory_store.py                # FinMem-lite: recency x relevancy x importance few-shot selection
     utils/
       data_loader.py
       feature_engineering.py
@@ -54,6 +55,7 @@ llm_trading_system/
       reddit_collector.py            # candidate "legitimate good trade" posts (PRAW + public fallback)
     rules/
       rules_engine.py                # confluence rules, pending/resolved flag tracking, weekly review
+      trade_ledger.py                # resolves every day-to-day prediction, Brier score + calibration
     config.py
     run.py
   scripts/
@@ -61,6 +63,7 @@ llm_trading_system/
     bootstrap_reddit_scan.py         # one-time ~2-week historical Reddit scan
   outputs/                          # Backtest outputs (equity curves, logs, blotters) - gitignored
   RULES.md                           # human-readable rules + changelog
+  RESEARCH.md                        # external research log + self-audit against a rigor checklist
   PROGRESS.md                        # day-by-day status tracker
   .env.example                       # Copy to .env for your Alpaca + Reddit keys
   README.md
@@ -163,12 +166,26 @@ server-hosted job. Check `PROGRESS.md`'s collection log periodically to make
 sure days aren't being silently missed.
 
 **How this feeds back into the LLM:** `data/labeled/resolved_flags.csv` is the
-ground-truth dataset — each row is a confluence-flagged ticker and whether it
-was actually profitable 14 trading days later. Once there's a meaningful
-sample, pull the best resolved examples into `AgentConfig.few_shots` (replacing
-the two generic hardcoded examples in `trading_agent.py`), and/or use the file
-as real training data for `sft_train.py` / `peft_train_lora.py`, which
-previously had no real-world data to train on at all.
+ground-truth dataset for rule-flagged events — each row is a confluence-flagged
+ticker and whether it was actually profitable 14 trading days later. Once
+there's a meaningful sample, it's usable as real training data for
+`sft_train.py` / `peft_train_lora.py`, which previously had no real-world data
+to train on at all.
+
+**Measuring and learning from every day-to-day trade (not just flagged ones):**
+`src/rules/trade_ledger.py` resolves *every* prediction `paper_trader.py` logs
+to `outputs/live_blotter.csv` — not just the rule-engine's flagged subset —
+against its realized 14-trading-day return, and reports a Brier score plus a
+confidence-decile reliability table (is "80% confident" actually right ~80% of
+the time?). `src/agents/memory_store.py` is a lightweight version of FinMem's
+recency x relevancy x importance memory scoring ([arXiv 2311.13743](https://arxiv.org/abs/2311.13743)), used to
+pick the most relevant *resolved* past calls as few-shot examples instead of
+the two generic hardcoded ones. Both are wired into `paper_trader.py`
+automatically — each run resolves due predictions, prints a calibration
+summary, and feeds a plain-language "experience summary" of recent track
+record into the prompt. See RESEARCH.md §5 for the research this is based on
+and what's still unimplemented (FinBERT sentiment, true embedding-based
+relevancy, multi-layer memory decay).
 
 ## What's Implemented
 - **Data processing & feature engineering**: Missing value handling, returns/volatility/RSI features, prompt-ready features.

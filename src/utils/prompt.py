@@ -1,6 +1,7 @@
 PROMPT_TEMPLATE = """
 You are a financial analyst producing **daily** directional signals for a single U.S. stock.
 
+{experience_block}
 {few_shot_block}
 {context_block}
 Today's structured snapshot:

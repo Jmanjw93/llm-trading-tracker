@@ -31,6 +31,9 @@ class TradingAgent:
         self.cfg = cfg
         self.llm = llm or MockLLM()
         self.retriever: NewsRetriever = NewsRetriever()
+        # Optional "experience summary" text (see trade_ledger.summarize_recent_performance),
+        # injected into every prompt this agent builds until reassigned.
+        self.experience_text: str = None
 
     def fit(self, train_df: pd.DataFrame) -> None:
         """
@@ -89,6 +92,7 @@ class TradingAgent:
                 few_shot_examples=(self.cfg.few_shots if use_few_shot else None),
                 context_docs=ctx,
                 use_rag=use_rag,  # 关键：训练/zero/few_shot 情况下为 False
+                experience_text=self.experience_text,
             )
 
             if self.cfg.strategy == "rag_uncertainty":

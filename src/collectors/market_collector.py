@@ -88,23 +88,37 @@ def compute_anomaly_features(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
+def append_to_history(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merges `df` (must have at least date, ticker, close) into the shared
+    data/market/history.csv, de-duplicated on (date, ticker) so re-running the
+    same day or overlapping lookback windows is safe. Shared by the daily
+    collector and the paper trading runner, so trade_ledger.py can resolve a
+    prediction made by *either* path against one persistent price history
+    instead of each keeping its own.
+    """
+    os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
+    keys = list(zip(df["date"], df["ticker"]))
+    if os.path.exists(HISTORY_PATH):
+        history = pd.read_csv(HISTORY_PATH, parse_dates=["date"])
+        history = history[~history.apply(lambda r: (r["date"], r["ticker"]) in keys, axis=1)]
+        combined = pd.concat([history, df], ignore_index=True)
+    else:
+        combined = df
+    combined = combined.sort_values(["ticker", "date"])
+    combined.to_csv(HISTORY_PATH, index=False)
+    return combined
+
+
 def collect_today(tickers: List[str]) -> pd.DataFrame:
-    """Fetches bars, computes features, appends today's rows to history.csv
-    (de-duplicated on date+ticker so re-running the same day is safe), and
-    returns just today's feature rows for the rule engine to consume."""
+    """Fetches bars, computes features, appends today's rows to history.csv,
+    and returns just today's feature rows for the rule engine to consume."""
     raw = fetch_bars(tickers)
     featured = compute_anomaly_features(raw)
     today = featured["date"].max()
     today_rows = featured[featured["date"] == today].copy()
 
-    os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
-    if os.path.exists(HISTORY_PATH):
-        history = pd.read_csv(HISTORY_PATH, parse_dates=["date"])
-        history = history[~((history["date"] == today) & (history["ticker"].isin(tickers)))]
-        combined = pd.concat([history, today_rows], ignore_index=True)
-    else:
-        combined = today_rows
-    combined.sort_values(["ticker", "date"]).to_csv(HISTORY_PATH, index=False)
+    append_to_history(featured[featured["ticker"].isin(tickers)])
 
     snapshot_path = f"./data/market/{today.date()}.csv"
     today_rows.to_csv(snapshot_path, index=False)

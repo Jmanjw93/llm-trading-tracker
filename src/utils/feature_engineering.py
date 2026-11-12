@@ -44,12 +44,15 @@ def build_prompt(
     context_docs: List[str] = None,
     use_rag: bool = True,
     few_shot_examples: List[str] = None,
+    experience_text: str = None,
 ) -> str:
     if few_shot_examples:
         examples = "\n".join(f"- {ex}" for ex in few_shot_examples)
         few_shot_block = f"Examples of the expected input/output format:\n{examples}\n"
     else:
         few_shot_block = ""
+
+    experience_block = f"{experience_text}\n" if experience_text else ""
 
     fundamentals = []
     if "pe" in row and not pd.isna(row["pe"]):
@@ -66,6 +69,7 @@ def build_prompt(
         context_block = ""  # 不使用 RAG 时为空
 
     prompt = PROMPT_TEMPLATE.format(
+        experience_block=experience_block,
         few_shot_block=few_shot_block,
         context_block=context_block,
         ticker=row.get("ticker", "N/A"),

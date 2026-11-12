@@ -128,7 +128,80 @@ system, honestly:
 
 ---
 
-## 5. What Feb 16, 2027 should actually mean
+## 5. Measuring day-to-day trades and learning from them
+
+Before this pass, nothing resolved whether the LLM's own daily direction/
+confidence calls (logged to `outputs/live_blotter.csv`) were actually right —
+only the rules engine's confluence-flagged subset got checked. That's a real
+gap: most days, the agent makes a call on every ticker in the universe, and
+none of those calls were ever scored.
+
+**What other projects do about this**, searched specifically on "how do LLM
+trading agents measure and learn from past calls":
+
+- **FinMem** (Yu et al., [arXiv 2311.13743](https://arxiv.org/abs/2311.13743)) scores every memory event by
+  **recency x relevancy x importance**: recency decays exponentially per
+  Ebbinghaus's forgetting curve (different stability per memory "layer" —
+  daily news decays fast, 10-Ks decay slowly), relevancy is embedding
+  similarity to the current query, and importance is a piecewise function of
+  the event's significance. Events get pruned once recency drops below 0.05
+  or importance drops below a threshold. This replaces a flat retriever with
+  one that actually prioritizes what mattered.
+- **CryptoTrade** ([arXiv 2407.09546](https://arxiv.org/html/2407.09546v1)) adds a separate reflection agent that
+  reviews the past week's decisions and returns, and feeds that review back
+  into the trading agent's context as guidance.
+- **TradingGroup** ([arXiv 2508.17565](https://arxiv.org/html/2508.17565v1)) builds an explicit "experience summary" of
+  the past 20 trading days' outcomes and injects it into the prompt; their
+  ablation reports this specifically helps, not just memory retrieval alone.
+- **TrustTrade** ([arXiv 2603.22567](https://arxiv.org/pdf/2603.22567)) logs every trade with its outcome fields
+  left empty until realized, resolved later — the same no-lookahead pattern
+  `rules_engine.py` and now `trade_ledger.py` already use.
+- **On confidence specifically**: search results on LLM calibration
+  (ConfidenceBench, KalshiBench-style prediction-market evaluations) found
+  that stated LLM confidence is frequently poorly calibrated — in at least
+  one benchmark, most models scored worse than simply predicting the base
+  rate. This matters a lot here, because `portfolio.position_size()` directly
+  multiplies position size by the model's stated confidence. An uncalibrated
+  confidence score isn't just imprecise, it's actively mis-sizing positions.
+
+**What we built because of this:**
+
+1. **`src/rules/trade_ledger.py`** — resolves *every* day-to-day prediction in
+   `outputs/live_blotter.csv` (not just confluence flags) against realized
+   14-trading-day returns, and reports:
+   - **Brier score** (mean squared error between stated confidence and
+     actual correctness; 0.25 is "no better than always saying 50%")
+   - A **reliability table** by confidence decile (does 80%-confident
+     actually mean ~80% correct?)
+   - A plain-language **experience summary** of the last N resolved calls,
+     following the CryptoTrade/TradingGroup pattern, injected into every
+     prompt via a new `experience_block` (`src/utils/prompt.py`)
+2. **`src/agents/memory_store.py`** — a single-layer, TF-IDF-based
+   simplification of FinMem's recency x relevancy x importance scoring
+   (no embedding model added - reuses the scikit-learn dependency already
+   required elsewhere), used to pick the most relevant *resolved* past calls
+   as few-shot examples instead of the two generic hardcoded ones. Returns an
+   empty list until real resolved data exists — it does not fabricate
+   examples.
+3. **`src/live/paper_trader.py`** now persists every run's price data to the
+   shared `data/market/history.csv` (needed for `trade_ledger.py` to resolve
+   predictions later), syncs the ledger at the start of each run, and wires
+   both the experience summary and memory-selected few-shot examples into the
+   agent before it predicts.
+4. Verified end-to-end with fabricated historical fixtures (not yet real
+   data): resolution math, Brier score, reliability table, and memory-ranked
+   few-shot selection all produce sane output. See the "Known limitations" in
+   RULES.md for a caveat about synthetic-mode price history collisions
+   between collectors until real Alpaca keys are added.
+
+**Not implemented this round** (same discipline as section 4): FinBERT
+sentiment scoring, a true embedding-based (vs. TF-IDF) relevancy measure, and
+multi-layer memory with per-layer decay rates. Listed in PROGRESS.md so they
+aren't lost.
+
+---
+
+## 6. What Feb 16, 2027 should actually mean
 
 Before this research pass, "collect data until Feb 16, 2027, then add real
 money" read as a fixed date. Per §4 Q5, our sample size will likely still be
