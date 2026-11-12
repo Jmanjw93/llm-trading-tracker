@@ -15,11 +15,12 @@ the single source of truth for "where are we" across sessions.
 - [x] Market data collector built (`src/collectors/market_collector.py`) - 2026-11-12
 - [x] Reddit collector built, public-JSON fallback until PRAW creds are added (`src/collectors/reddit_collector.py`) - 2026-11-12
 - [x] Rule engine + labeling pipeline built (`src/rules/rules_engine.py`, `RULES.md`) - 2026-11-12
-- [ ] Reddit API credentials (REDDIT_CLIENT_ID/SECRET) added to `.env` - **blocked on you**, see README "Reddit API setup"
+- [ ] Reddit API credentials (REDDIT_CLIENT_ID/SECRET) added to `.env` - **blocked on you**, see README "Reddit API setup". Confirmed 2026-11-12 that the no-login fallback is blocked (403) from this network, so this isn't optional for real collection.
 - [ ] Alpaca paper API keys added to `.env` - optional until real data collection matters more than synthetic
-- [ ] Windows Task Scheduler job created for `scripts/daily_collect.py`
+- [x] Windows Task Scheduler job created for `scripts/daily_collect.py` - runs weekdays at 5:00 PM local time - 2026-11-12
 - [ ] First weekly rule review (needs 7 collection days first)
 - [ ] First resolved flag (needs 14 trading days after first flag)
+- [ ] Bootstrap Reddit scan (`scripts/bootstrap_reddit_scan.py`) - not yet run for real; needs working Reddit access first
 
 ## Collection log
 
