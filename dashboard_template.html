@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Trading Dry Run</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-strategy: #2a78d6; /* categorical slot 1 blue */
+    --series-benchmark: #eb6834; /* categorical slot 2 orange */
+    --div-pos:        #2a78d6; /* diverging blue = long */
+    --div-neg:        #e34948; /* diverging red = short */
+    --div-mid:        #f0efec; /* neutral gray midpoint */
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-critical:#d03b3b;
+    --success-text:   #006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-strategy: #3987e5;
+      --series-benchmark: #d95926;
+      --div-pos:        #3987e5;
+      --div-neg:        #e66767;
+      --div-mid:        #383835;
+      --status-good:    #0ca30c;
+      --status-warning: #fab219;
+      --status-critical:#d03b3b;
+      --success-text:   #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-strategy: #3987e5;
+    --series-benchmark: #d95926;
+    --div-pos:        #3987e5;
+    --div-neg:        #e66767;
+    --div-mid:        #383835;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-critical:#d03b3b;
+    --success-text:   #0ca30c;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--page-plane);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text-primary);
+  }
+  .viz-root { padding: 16px; max-width: 1180px; margin: 0 auto; }
+
+  .banner {
+    background: var(--status-critical);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    padding: 8px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 20px; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 700px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .tile-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .tile-value {
+    font-size: 22px;
+    font-weight: 600;
+    font-variant-numeric: proportional-nums;
+  }
+  .tile-value.good { color: var(--success-text); }
+  .tile-value.bad { color: var(--status-critical); }
+
+  .panel {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .panel-title { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+  .panel-sub { font-size: 12px; color: var(--text-secondary); margin: 0 0 12px; }
+
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  svg { display: block; overflow: visible; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .axis-label { fill: var(--text-muted); font-size: 10px; }
+  .riskoff-band { fill: var(--status-critical); opacity: 0.08; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface-1);
+    font-size: 11px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+    transform: translate(-50%, -115%);
+    opacity: 0;
+    transition: opacity 0.08s ease;
+    z-index: 5;
+  }
+  .chart-wrap { position: relative; }
+  .crosshair { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; }
+
+  .heatmap-row-label { font-size: 11px; fill: var(--text-secondary); }
+  .heatmap-cell { stroke: var(--surface-1); stroke-width: 2; cursor: pointer; }
+  .heatmap-cell:hover { stroke: var(--text-primary); }
+
+  .toggle-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .toggle-btn {
+    font-size: 12px;
+    padding: 5px 11px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .toggle-btn.active { background: var(--series-strategy); color: #fff; border-color: var(--series-strategy); }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.data-table th, table.data-table td {
+    text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  table.data-table th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .scroll-table { max-height: 360px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .dir-bullish { color: var(--div-pos); font-weight: 600; }
+  .dir-bearish { color: var(--div-neg); font-weight: 600; }
+  .dir-neutral { color: var(--text-muted); }
+
+  footer { font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px 0 20px; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <div class="banner">⚠ DRY RUN — SIMULATED DATA, NO REAL MONEY, NO API CALLS</div>
+  <h1>Paper Trading Dry Run</h1>
+  <p class="subtitle" id="subtitle"></p>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="panel">
+    <p class="panel-title">Equity Curve: Strategy vs. Buy-and-Hold Benchmark</p>
+    <p class="panel-sub">Shaded bands mark days the drawdown kill switch forced the book flat (risk-off).</p>
+    <div class="legend">
+      <span class="legend-item"><span class="swatch" style="background:var(--series-strategy)"></span>Strategy</span>
+      <span class="legend-item"><span class="swatch" style="background:var(--series-benchmark)"></span>Buy &amp; hold</span>
+      <span class="legend-item"><span class="swatch" style="background:var(--status-critical);opacity:0.3"></span>Risk-off</span>
+    </div>
+    <div class="chart-wrap" id="equityChartWrap"></div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Daily Positions by Ticker</p>
+    <p class="panel-sub">Blue = long, red = short, gray = flat. Hover a cell for the day's direction and confidence.</p>
+    <div class="toggle-row">
+      <button class="toggle-btn active" id="btnHeatmap">Heatmap</button>
+      <button class="toggle-btn" id="btnTable">Table</button>
+    </div>
+    <div id="heatmapView"></div>
+    <div id="tableView" style="display:none"></div>
+  </div>
+
+  <footer>Generated from a local dry run of llm-trading-system/src/live/paper_trader.py. Past (simulated) performance is not indicative of anything.</footer>
+</div>
+
+<script id="run-data" type="application/json">__DATA_JSON__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('run-data').textContent);
+
+function fmtPct(x) { return (x * 100).toFixed(2) + '%'; }
+function fmtNum(x) { return x.toFixed(2); }
+
+document.getElementById('subtitle').textContent =
+  `${DATA.tickers.join(', ')} · ${DATA.equity.length} simulated trading days`;
+
+// ---- Stat tiles ----
+const s = DATA.stats;
+const tiles = [
+  { label: 'Annual Return', value: fmtPct(s.annual_return), good: s.annual_return > 0 },
+  { label: 'vs. Benchmark', value: fmtPct(s.excess_annual_return), good: s.excess_annual_return > 0 },
+  { label: 'Sharpe', value: fmtNum(s.sharpe), good: s.sharpe > 0 },
+  { label: 'Sortino', value: fmtNum(s.sortino), good: s.sortino > 0 },
+  { label: 'Max Drawdown', value: fmtPct(s.max_drawdown), good: false },
+  { label: 'Hit Rate', value: fmtPct(s.hit_rate), good: s.hit_rate > 0.5 },
+  { label: 'Avg Daily Turnover', value: fmtNum(s.avg_daily_turnover), good: null },
+  { label: 'Days Risk-Off', value: String(s.days_risk_off), good: s.days_risk_off === 0 },
+];
+document.getElementById('tiles').innerHTML = tiles.map(t => `
+  <div class="tile">
+    <div class="tile-label">${t.label}</div>
+    <div class="tile-value ${t.good === null ? '' : (t.good ? 'good' : 'bad')}">${t.value}</div>
+  </div>
+`).join('');
+
+// ---- Equity curve chart ----
+(function renderEquityChart() {
+  const wrap = document.getElementById('equityChartWrap');
+  const W = 1100, H = 300, padL = 44, padR = 12, padT = 10, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+
+  const rows = DATA.equity;
+  const n = rows.length;
+  const allVals = rows.flatMap(r => [r.equity, r.benchmark_equity]).filter(v => v != null && !isNaN(v));
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+  const pad = (maxV - minV) * 0.08 || 0.05;
+  const yMin = minV - pad, yMax = maxV + pad;
+
+  const x = i => padL + (i / (n - 1)) * innerW;
+  const y = v => padT + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
+
+  function pathFor(key) {
+    return rows.map((r, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(2)} ${y(r[key]).toFixed(2)}`).join(' ');
+  }
+
+  // risk-off bands
+  let bands = '';
+  let bandStart = null;
+  rows.forEach((r, i) => {
+    if (!r.risk_on && bandStart === null) bandStart = i;
+    if (r.risk_on && bandStart !== null) {
+      bands += `<rect class="riskoff-band" x="${x(bandStart).toFixed(2)}" y="${padT}" width="${(x(i) - x(bandStart)).toFixed(2)}" height="${innerH}"></rect>`;
+      bandStart = null;
+    }
+  });
+  if (bandStart !== null) {
+    bands += `<rect class="riskoff-band" x="${x(bandStart).toFixed(2)}" y="${padT}" width="${(x(n - 1) - x(bandStart)).toFixed(2)}" height="${innerH}"></rect>`;
+  }
+
+  // gridlines (4 horizontal)
+  let grid = '';
+  const steps = 4;
+  for (let g = 0; g <= steps; g++) {
+    const v = yMin + (g / steps) * (yMax - yMin);
+    const yy = y(v);
+    grid += `<line class="gridline" x1="${padL}" x2="${W - padR}" y1="${yy.toFixed(2)}" y2="${yy.toFixed(2)}"></line>`;
+    grid += `<text class="axis-label" x="4" y="${(yy + 3).toFixed(2)}">${v.toFixed(2)}x</text>`;
+  }
+
+  const tickEvery = Math.max(1, Math.floor(n / 6));
+  let xlabels = '';
+  rows.forEach((r, i) => {
+    if (i % tickEvery === 0) {
+      xlabels += `<text class="axis-label" x="${x(i).toFixed(2)}" y="${H - 6}" text-anchor="middle">${r.date.slice(5)}</text>`;
+    }
+  });
+
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">
+      ${bands}
+      ${grid}
+      <line class="baseline" x1="${padL}" x2="${W - padR}" y1="${padT + innerH}" y2="${padT + innerH}"></line>
+      <path d="${pathFor('benchmark_equity')}" fill="none" stroke="var(--series-benchmark)" stroke-width="2"></path>
+      <path d="${pathFor('equity')}" fill="none" stroke="var(--series-strategy)" stroke-width="2"></path>
+      ${xlabels}
+      <line id="crosshair" class="crosshair" x1="0" x2="0" y1="${padT}" y2="${padT + innerH}"></line>
+      <rect id="hoverCatcher" x="${padL}" y="${padT}" width="${innerW}" height="${innerH}" fill="transparent"></rect>
+    </svg>
+    <div class="tooltip" id="equityTooltip"></div>
+  `;
+
+  const svg = wrap.querySelector('svg');
+  const catcher = wrap.querySelector('#hoverCatcher');
+  const crosshair = wrap.querySelector('#crosshair');
+  const tooltip = wrap.querySelector('#equityTooltip');
+
+  catcher.addEventListener('mousemove', (e) => {
+    const rect = svg.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * W;
+    let i = Math.round(((px - padL) / innerW) * (n - 1));
+    i = Math.max(0, Math.min(n - 1, i));
+    const r = rows[i];
+    const cx = x(i);
+    crosshair.setAttribute('x1', cx); crosshair.setAttribute('x2', cx);
+    crosshair.style.opacity = 1;
+    tooltip.style.opacity = 1;
+    tooltip.style.left = `${(cx / W) * 100}%`;
+    tooltip.style.top = `${((y(r.equity)) / H) * 100}%`;
+    tooltip.innerHTML = `<b>${r.date}</b><br>Strategy: ${r.equity.toFixed(3)}x<br>Benchmark: ${r.benchmark_equity.toFixed(3)}x${!r.risk_on ? '<br><span style="color:var(--status-critical)">risk-off</span>' : ''}`;
+  });
+  catcher.addEventListener('mouseleave', () => {
+    crosshair.style.opacity = 0;
+    tooltip.style.opacity = 0;
+  });
+})();
+
+// ---- Position heatmap ----
+(function renderHeatmap() {
+  const container = document.getElementById('heatmapView');
+  const tickers = DATA.tickers;
+  const dates = DATA.dates;
+  const cellW = Math.max(4, Math.min(14, Math.floor(1040 / dates.length)));
+  const cellH = 26;
+  const labelW = 54;
+  const W = labelW + dates.length * cellW;
+  const H = tickers.length * cellH;
+
+  function colorFor(w) {
+    if (Math.abs(w) < 1e-6) return 'var(--div-mid)';
+    const t = Math.min(1, Math.abs(w) / 0.6);
+    const base = w > 0 ? [42, 120, 214] : [227, 73, 72]; // --div-pos / --div-neg (light values)
+    const mix = [240, 239, 236]; // --div-mid light
+    const rgb = base.map((c, idx) => Math.round(mix[idx] + (c - mix[idx]) * (0.35 + 0.65 * t)));
+    return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+  }
+
+  let cells = '';
+  let labels = '';
+  tickers.forEach((t, ti) => {
+    labels += `<text class="heatmap-row-label" x="${labelW - 8}" y="${ti * cellH + cellH / 2 + 4}" text-anchor="end">${t}</text>`;
+    dates.forEach((d, di) => {
+      const rec = DATA.blotter_by_ticker[t][di];
+      const w = rec ? rec.weight : 0;
+      cells += `<rect class="heatmap-cell" data-ticker="${t}" data-date="${d}" x="${labelW + di * cellW}" y="${ti * cellH}" width="${cellW}" height="${cellH - 2}" fill="${colorFor(w)}"></rect>`;
+    });
+  });
+
+  container.innerHTML = `
+    <div class="chart-wrap">
+      <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">
+        ${cells}
+        ${labels}
+      </svg>
+      <div class="tooltip" id="heatmapTooltip"></div>
+    </div>
+  `;
+
+  const svg = container.querySelector('svg');
+  const tooltip = container.querySelector('#heatmapTooltip');
+  svg.querySelectorAll('.heatmap-cell').forEach(cell => {
+    cell.addEventListener('mouseenter', (e) => {
+      const t = cell.getAttribute('data-ticker');
+      const d = cell.getAttribute('data-date');
+      const di = dates.indexOf(d);
+      const rec = DATA.blotter_by_ticker[t][di];
+      const rect = cell.getBoundingClientRect();
+      const parentRect = svg.getBoundingClientRect();
+      tooltip.style.left = `${((rect.left + rect.width / 2 - parentRect.left) / parentRect.width) * 100}%`;
+      tooltip.style.top = `${((rect.top - parentRect.top) / parentRect.height) * 100}%`;
+      tooltip.style.opacity = 1;
+      tooltip.innerHTML = rec
+        ? `<b>${t}</b> · ${d}<br>${rec.direction} (conf ${(rec.confidence * 100).toFixed(0)}%)<br>weight ${rec.weight.toFixed(2)}`
+        : `<b>${t}</b> · ${d}<br>no data`;
+    });
+    cell.addEventListener('mouseleave', () => { tooltip.style.opacity = 0; });
+  });
+})();
+
+// ---- Table view ----
+(function renderTable() {
+  const container = document.getElementById('tableView');
+  const rows = DATA.blotter.slice().reverse();
+  const body = rows.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td>${r.ticker}</td>
+      <td class="dir-${r.direction}">${r.direction}</td>
+      <td>${(r.confidence * 100).toFixed(0)}%</td>
+      <td>${r.weight.toFixed(2)}</td>
+      <td>${r.risk_on ? 'on' : 'off'}</td>
+    </tr>
+  `).join('');
+  container.innerHTML = `
+    <div class="scroll-table">
+      <table class="data-table">
+        <thead><tr><th>Date</th><th>Ticker</th><th>Direction</th><th>Confidence</th><th>Weight</th><th>Risk</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+})();
+
+document.getElementById('btnHeatmap').addEventListener('click', (e) => {
+  document.getElementById('heatmapView').style.display = '';
+  document.getElementById('tableView').style.display = 'none';
+  e.target.classList.add('active');
+  document.getElementById('btnTable').classList.remove('active');
+});
+document.getElementById('btnTable').addEventListener('click', (e) => {
+  document.getElementById('heatmapView').style.display = 'none';
+  document.getElementById('tableView').style.display = '';
+  e.target.classList.add('active');
+  document.getElementById('btnHeatmap').classList.remove('active');
+});
+</script>
+</body>
+</html>

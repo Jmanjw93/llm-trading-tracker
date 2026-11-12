@@ -18,10 +18,14 @@ class NewsRetriever:
     def fit(self, docs: List[str], dates: Optional[List[str]] = None):
         self.corpus = [d or "" for d in docs]
         self.index_dates = dates or [""] * len(self.corpus)
+        self.matrix = None
         if self.vectorizer is not None:
-            self.matrix = self.vectorizer.fit_transform(self.corpus)
-        else:
-            self.matrix = None
+            try:
+                self.matrix = self.vectorizer.fit_transform(self.corpus)
+            except ValueError:
+                # All-empty or stop-word-only corpus (common on quiet trading days):
+                # fall back to the lexical overlap path in topk() instead of crashing.
+                self.vectorizer = None
 
     def topk(self, query: str, k: int = 3) -> List[Tuple[int, float]]:
         if not self.corpus:

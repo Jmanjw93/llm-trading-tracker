@@ -32,15 +32,25 @@ def add_technical_features(df: pd.DataFrame) -> pd.DataFrame:
             g[col] = g[col].replace([np.inf, -np.inf], np.nan).bfill().ffill()
         return g
 
-    out = df.groupby("ticker", group_keys=False).apply(per_ticker, include_groups=True)
+    # Avoid groupby().apply(include_groups=...), which was removed in newer
+    # pandas and behaves inconsistently across versions anyway; a plain loop
+    # keeps the ticker column intact regardless of pandas version.
+    parts = [per_ticker(g) for _, g in df.groupby("ticker", sort=False)]
+    out = pd.concat(parts, ignore_index=True)
     return out
 
 def build_prompt(
     row: pd.Series,
     context_docs: List[str] = None,
     use_rag: bool = True,
+    few_shot_examples: List[str] = None,
 ) -> str:
-    # few-shot 如果需要也可以做成可选块，这里先聚焦 context
+    if few_shot_examples:
+        examples = "\n".join(f"- {ex}" for ex in few_shot_examples)
+        few_shot_block = f"Examples of the expected input/output format:\n{examples}\n"
+    else:
+        few_shot_block = ""
+
     fundamentals = []
     if "pe" in row and not pd.isna(row["pe"]):
         fundamentals.append(f"PE={row['pe']:.2f}")
@@ -56,6 +66,7 @@ def build_prompt(
         context_block = ""  # 不使用 RAG 时为空
 
     prompt = PROMPT_TEMPLATE.format(
+        few_shot_block=few_shot_block,
         context_block=context_block,
         ticker=row.get("ticker", "N/A"),
         date=row.get("date"),

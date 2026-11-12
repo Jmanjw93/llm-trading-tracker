@@ -64,7 +64,6 @@ class FineTunedStubModel(BaseLLM):
                 b["reason"] += " RSI>70 tilt."
         return base
 
-# Placeholders for real models:
 class OpenAIModel(BaseLLM):
     def __init__(self, model_name: str = "gpt-4o-mini", api_key_env: str = "OPENAI_API_KEY"):
         self.model_name = model_name
@@ -73,7 +72,87 @@ class OpenAIModel(BaseLLM):
         raise NotImplementedError("Implement OpenAI API call here.")
 
 class HFModel(BaseLLM):
-    def __init__(self, model_name: str = "distilbert-base-uncased-finetuned-sst-2-english"):
+    """
+    Real local Transformers inference for an instruction-tuned causal LM.
+    Loads once and is reused across predict_day calls. Defaults to a small
+    instruct model that is realistic to run on a CPU; pass model_name= for
+    anything larger if a GPU is available.
+    """
+    _JSON_RE = re.compile(r"\{.*?\}", re.S)
+
+    def __init__(self,
+                 model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+                 device_map: str = "auto",
+                 max_new_tokens: int = 128,
+                 dtype: Optional[str] = None):
         self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
+        self._tok = None
+        self._model = None
+        self._device_map = device_map
+        self._dtype = dtype
+
+    def _lazy_load(self):
+        if self._model is not None:
+            return
+        import torch
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        torch_dtype = self._dtype
+        if torch_dtype is None:
+            torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+        self._tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
+        if self._tok.pad_token is None:
+            self._tok.pad_token = self._tok.eos_token
+        self._model = AutoModelForCausalLM.from_pretrained(
+            self.model_name,
+            device_map=self._device_map,
+            torch_dtype=torch_dtype,
+        )
+        self._model.eval()
+
+    def _post(self, text: str) -> Dict[str, Any]:
+        m = self._JSON_RE.search(text)
+        js = {"direction": "neutral", "confidence": 0.5, "reason": "parse-fallback"}
+        if m:
+            try:
+                obj = json.loads(m.group(0))
+                d = str(obj.get("direction", "neutral")).lower()
+                c = float(obj.get("confidence", 0.5))
+                r = obj.get("reason", "")
+                if d not in ("bullish", "bearish", "neutral"):
+                    d = "neutral"
+                c = max(0.0, min(1.0, c))
+                js = {"direction": d, "confidence": c, "reason": r}
+            except Exception:
+                pass
+        return js
+
     def generate(self, prompt: str, n_samples: int = 1, temperature: float = 0.7) -> List[Dict[str, Any]]:
-        raise NotImplementedError("Implement Transformers inference here.")
+        import torch
+        self._lazy_load()
+
+        messages = [
+            {"role": "system", "content": "You are a disciplined financial analyst. Respond with ONLY a single JSON object, no extra text."},
+            {"role": "user", "content": prompt},
+        ]
+        chat_prompt = self._tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        inputs = self._tok([chat_prompt] * max(1, n_samples), return_tensors="pt", padding=True)
+        inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
+
+        do_sample = temperature is not None and temperature > 0.0
+        with torch.no_grad():
+            outs = self._model.generate(
+                **inputs,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=do_sample,
+                temperature=max(0.01, float(temperature)) if do_sample else None,
+                top_p=0.95 if do_sample else None,
+                pad_token_id=self._tok.pad_token_id,
+            )
+
+        prompt_len = inputs["input_ids"].shape[1]
+        gen_tokens = outs[:, prompt_len:]
+        texts = self._tok.batch_decode(gen_tokens, skip_special_tokens=True)
+        return [self._post(t) for t in texts]

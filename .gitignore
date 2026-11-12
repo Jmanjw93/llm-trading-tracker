@@ -20,6 +20,7 @@ __pycache__/
 .ai-navigator/
 micromamba/
 .env/
+.env
 .venv/
 
 # 模型/大文件

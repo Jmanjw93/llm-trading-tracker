@@ -36,8 +36,10 @@ class TradingAgent:
         """
         仅用训练集新闻拟合检索器，避免在推理时检索到未来信息（防泄露）。
         """
-        docs = list((train_df.get("news") or pd.Series([])).astype(str).values)
-        dates = list((train_df.get("date") or pd.Series([])).astype(str).values)
+        news_col = train_df["news"] if "news" in train_df.columns else pd.Series([], dtype=str)
+        date_col = train_df["date"] if "date" in train_df.columns else pd.Series([], dtype=str)
+        docs = list(news_col.astype(str).values)
+        dates = list(date_col.astype(str).values)
         self.retriever.fit(docs, dates)
 
     def _context_for_row(self, row: pd.Series) -> List[str]:
