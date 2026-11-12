@@ -19,7 +19,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.collectors import market_collector, reddit_collector
 from src.rules import rules_engine
 
-DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "AMD", "AMZN", "GOOGL", "META", "SPY", "QQQ"]
+# ~50 large-cap names (not a true point-in-time index snapshot - just a
+# defensible-sized, recognizable universe) instead of the original 10. Per
+# RESEARCH.md section 4 (Q5): a 10-name universe is a case study, not a
+# backtest - this is a step toward the field's own ~50-name floor, not a
+# claim of full index replication.
+DEFAULT_TICKERS = [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "AVGO", "COST",
+    "NFLX", "AMD", "ADBE", "PEP", "CSCO", "TMUS", "INTC", "QCOM", "INTU", "TXN",
+    "AMAT", "AMGN", "HON", "BKNG", "ISRG", "VRTX", "SBUX", "GILD", "MDLZ", "ADI",
+    "LRCX", "REGN", "PANW", "PYPL", "SNPS", "CDNS", "KLAC", "MU", "CRWD", "MAR",
+    "ORLY", "CTAS", "ABNB", "FTNT", "ADP", "MNST", "PCAR", "NXPI", "SPY", "QQQ",
+]
 PROGRESS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "PROGRESS.md")
 
 

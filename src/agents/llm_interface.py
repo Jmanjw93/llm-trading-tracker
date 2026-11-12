@@ -82,10 +82,20 @@ class HFModel(BaseLLM):
 
     def __init__(self,
                  model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+                 revision: Optional[str] = None,
                  device_map: str = "auto",
                  max_new_tokens: int = 128,
                  dtype: Optional[str] = None):
+        """
+        revision: a specific Hub commit SHA (or tag) to pin, rather than
+        floating on whatever `model_name` currently resolves to. Matters for
+        two reasons (see RESEARCH.md section 4): reproducibility, and being
+        able to reason at all about whether a backtest window post-dates the
+        model's training cutoff - you can't check a cutoff against a model
+        that silently changes under you.
+        """
         self.model_name = model_name
+        self.revision = revision
         self.max_new_tokens = max_new_tokens
         self._tok = None
         self._model = None
@@ -102,11 +112,12 @@ class HFModel(BaseLLM):
         if torch_dtype is None:
             torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
-        self._tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=True)
+        self._tok = AutoTokenizer.from_pretrained(self.model_name, revision=self.revision, use_fast=True)
         if self._tok.pad_token is None:
             self._tok.pad_token = self._tok.eos_token
         self._model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
+            revision=self.revision,
             device_map=self._device_map,
             torch_dtype=torch_dtype,
         )

@@ -47,6 +47,25 @@ This resolved file is the actual training signal:
   hit rate among resolved flags, so thresholds can be revised with evidence
   instead of intuition.
 
+## Known limitations (added after external research — see RESEARCH.md)
+
+- **LLM look-ahead bias / memorization.** `HFModel`'s backbone has a training
+  cutoff we don't precisely know. A backtest run on historical dates before
+  that cutoff risks measuring what the model already memorized, not genuine
+  prediction. **Only the paper-trading data collected from today forward is a
+  credible test of this system** — don't trust a historical backtest's Sharpe
+  as evidence the LLM-driven signal "works." See RESEARCH.md §4.
+- **Reddit momentum (R4) is not a directional bet.** External research on
+  WSB/Reddit sentiment is mixed-to-contrarian — heavier bullish chatter often
+  precedes *weaker* forward returns, not stronger ones. R4 was already
+  designed to flag attention, not direction, which turns out to be the right
+  call rather than an accident. Do not change R4 to assume "mentioned a lot"
+  means "will go up." See RESEARCH.md §1.
+- **Sample size.** A 50-ticker universe over ~66 trading days (today through
+  Feb 16, 2027) is still below the field's informal floor of 50 names / 250
+  trading days for a believable "it works" claim. Treat any hit-rate number
+  from `weekly_rule_review()` before then as directional, not conclusive.
+
 ## Weekly review process
 
 Every 7 collection days, run `weekly_rule_review()` and look at:
@@ -62,3 +81,9 @@ Every 7 collection days, run `weekly_rule_review()` and look at:
 - **2026-11-12**: Initial ruleset (R1-R5) established. No resolved flags yet -
   all thresholds above are starting guesses pending real data. Confluence
   minimum set to 2 of 4 rules.
+- **2026-11-12**: After researching external literature on LLM trading agent
+  evaluation and WSB sentiment (see RESEARCH.md), expanded the default ticker
+  universe from 10 to ~50 names (`scripts/daily_collect.py`), added HF model
+  revision pinning for reproducibility (`src/agents/llm_interface.py`), and
+  added the "Known limitations" section above. No rule thresholds changed -
+  this pass was about evaluation rigor, not the rules themselves.

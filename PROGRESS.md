@@ -1,6 +1,12 @@
 # Progress Tracker
 
-**Target date for real money: February 16, 2027.**
+**Target date for real money: February 16, 2027** — as of 2026-11-12, treat this
+as a **scheduled review checkpoint, not an automatic go-live date**. See
+RESEARCH.md §5: our sample size (50 tickers x ~66 trading days by then) will
+likely still be below the field's own bar for a believable "this works" claim.
+On that date, re-run the 5-question audit in RESEARCH.md §4 with real numbers
+before deciding anything about real capital.
+
 Today: 2026-11-12. ~95 calendar days / ~66 trading days remaining.
 
 This file is updated by `scripts/daily_collect.py` on every run (collection
@@ -21,12 +27,16 @@ the single source of truth for "where are we" across sessions.
 - [ ] First weekly rule review (needs 7 collection days first)
 - [ ] First resolved flag (needs 14 trading days after first flag)
 - [ ] Bootstrap Reddit scan (`scripts/bootstrap_reddit_scan.py`) - not yet run for real; needs working Reddit access first
+- [x] Research pass: surveyed academic WSB-sentiment literature + GitHub LLM-trading ecosystem, self-audited against an external rigor checklist - 2026-11-12, see `RESEARCH.md`
+- [ ] FinBERT sentiment scoring (researched, not implemented - RESEARCH.md §2)
+- [ ] FinMem-style layered memory for the retriever (researched, not implemented - RESEARCH.md §3)
+- [ ] Re-run the RESEARCH.md §4 five-question audit with real numbers before Feb 16, 2027
 
 ## Collection log
 
 | Date | Trading day # | Tickers | Flagged | Pending | Resolved | Notes |
 |---|---|---|---|---|---|---|
-| 2026-11-12 | 1 | 10 | none | 0 | 0 | |
+| 2026-11-12 | 1 | 50 | TXN | 1 | 0 | |
 
 ## Decisions
 
@@ -40,3 +50,7 @@ the single source of truth for "where are we" across sessions.
   Reddit's public listing API only supports hour/day/week/month/year/all, not
   arbitrary date ranges. Daily collection going forward fills in the finer
   granularity day by day.
+- **2026-11-12**: Expanded ticker universe from 10 to ~50 large-cap names and
+  added HF model revision pinning, based on an external research pass - see
+  `RESEARCH.md`. Also reframed Feb 16, 2027 from a fixed go-live date to a
+  review checkpoint, for the same reason (sample size).

@@ -125,7 +125,11 @@ candidate trades, checks each one's realized outcome 14 trading days later, and
 uses that resolved data to make the rules (and eventually the LLM) actually
 evidence-based instead of guessing. The full ruleset lives in `RULES.md` —
 read that for *what* the rules are; this section is about running the pipeline.
-`PROGRESS.md` is the day-by-day status tracker.
+`PROGRESS.md` is the day-by-day status tracker, and `RESEARCH.md` is an
+evidence log of external research (academic papers, GitHub projects) that
+actually changed something here, including a self-audit of this repo against
+an external rigor checklist for LLM trading claims — read that before trusting
+any backtest number this system produces.
 
 **Reddit API setup** (needed for reliable collection — Reddit blocks most
 unauthenticated/datacenter traffic to its public JSON endpoints, so the
